@@ -29,7 +29,12 @@ from auth import (
     hash_password,
     verify_password,
 )
-from db import daily_goals_collection, injury_notes_collection, users_collection, workout_logs_collection
+from db import (
+    daily_goals_collection,
+    injury_notes_collection,
+    users_collection,
+    workout_logs_collection,
+)
 from fitness_qa_agent import run_fitness_qa_agent
 from injury_agent import run_injury_agent
 from nutrition_agent import run_nutrition_agent
@@ -46,12 +51,12 @@ from schemas import (
     WorkoutLog,
 )
 
-app = FastAPI(title="Gym App Auth API")
+app = FastAPI(title="Gym App API")
 
-# auto_error=False so we can return our own 401s with clear messages
+# OAuth2 scheme for Swagger docs
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token", auto_error=False)
 
-REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days, matches REFRESH_TOKEN_EXPIRE_DAYS
+REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
@@ -60,6 +65,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         value=refresh_token,
         httponly=True,
         samesite="lax",
+        secure=True,  # important for HTTPS in production
         max_age=REFRESH_COOKIE_MAX_AGE,
         path="/api",
     )
@@ -82,7 +88,7 @@ def get_current_user(token: str | None = Depends(oauth2_scheme)) -> dict:
     return user
 
 
-# ---------------------------------------------------------------- signup ---
+# --------------------------- Auth ---------------------------
 @app.post("/api/signup", response_model=TokenResponse)
 def signup(data: SignupRequest, response: Response):
     if users_collection.find_one({"email": data.email}):
@@ -109,7 +115,6 @@ def signup(data: SignupRequest, response: Response):
     return TokenResponse(access_token=access_token)
 
 
-# ----------------------------------------------------------------- login ---
 @app.post("/api/login", response_model=TokenResponse)
 def login(data: LoginRequest, response: Response):
     user = users_collection.find_one({"email": data.email})
@@ -121,15 +126,8 @@ def login(data: LoginRequest, response: Response):
     return TokenResponse(access_token=access_token)
 
 
-# -------------------------------------------------------- token (Swagger) -
 @app.post("/api/token", response_model=TokenResponse, include_in_schema=False)
 def token_login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
-    """
-    Exists ONLY so the "Authorize" button in /docs works — it expects a
-    standard OAuth2 form (username/password), not our JSON /api/login.
-    Put your email in the "username" field. Your actual frontend should
-    keep using /api/login (JSON) — this endpoint is just for testing.
-    """
     user = users_collection.find_one({"email": form_data.username})
     if not user or not verify_password(form_data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
@@ -139,7 +137,6 @@ def token_login(response: Response, form_data: OAuth2PasswordRequestForm = Depen
     return TokenResponse(access_token=access_token)
 
 
-# --------------------------------------------------------------- refresh ---
 @app.post("/api/refresh", response_model=TokenResponse)
 def refresh(refresh_token: str | None = Cookie(default=None)):
     if not refresh_token:
@@ -155,14 +152,13 @@ def refresh(refresh_token: str | None = Cookie(default=None)):
     return TokenResponse(access_token=create_access_token(payload["sub"]))
 
 
-# ---------------------------------------------------------------- logout ---
 @app.post("/api/logout")
 def logout(response: Response):
     response.delete_cookie("refresh_token", path="/api")
     return {"message": "Logged out"}
 
 
-# ----------------------------------------------------------------- profile -
+# --------------------------- Profile ---------------------------
 @app.get("/api/me", response_model=ProfileResponse)
 def get_me(user: dict = Depends(get_current_user)):
     return ProfileResponse(**user)
@@ -177,55 +173,34 @@ def update_me(data: ProfileUpdate, user: dict = Depends(get_current_user)):
     return ProfileResponse(**user)
 
 
-# ------------------------------------------------------------ nutrition ---
+# --------------------------- Agents ---------------------------
 @app.post("/api/nutrition/ask")
 def nutrition_ask(data: NutritionQuestion, user: dict = Depends(get_current_user)):
-    """
-    Runs the LangGraph Nutrition Agent for the CURRENTLY LOGGED-IN user.
-    user_id comes from the JWT, never from client input, so there's no
-    way to mix it up or mistype it.
-    """
     response_text = run_nutrition_agent(user["user_id"], data.question)
     return {"response": response_text}
 
 
-# --------------------------------------------------------------- injury ---
 @app.post("/api/injuries/report")
 def report_injury(data: InjuryReport, user: dict = Depends(get_current_user)):
-    """
-    Runs the LangGraph Injury Agent for the CURRENTLY LOGGED-IN user.
-    Describe what hurts in plain language, e.g.
-    "sharp pain in my left knee during squats".
-    """
     response_text = run_injury_agent(user["user_id"], data.message)
     return {"response": response_text}
 
 
 @app.get("/api/injuries")
 def list_injuries(user: dict = Depends(get_current_user)):
-    """Returns all logged injuries for the current user, most recent first."""
     docs = list(injury_notes_collection.find({"user_id": user["user_id"]}))
     docs.sort(key=lambda d: d.get("logged_at", ""), reverse=True)
     return {"injuries": docs}
 
 
-# -------------------------------------------------------------- progress ---
 @app.post("/api/progress/log")
 def log_progress(data: WorkoutLog, user: dict = Depends(get_current_user)):
-    """
-    Runs the LangGraph Progress Agent for the CURRENTLY LOGGED-IN user.
-    Describe today's workout in plain language, e.g.
-    "4 sets of squats at 60kg, 8 reps, 45 min total, felt strong".
-    Logs the workout, checks your goal + any active injuries, and sets
-    a concrete goal for your next session.
-    """
     response_text = run_progress_agent(user["user_id"], data.message)
     return {"response": response_text}
 
 
 @app.get("/api/progress/goals")
 def list_goals(user: dict = Depends(get_current_user)):
-    """Returns all daily goals set for the current user, most recent first."""
     docs = list(daily_goals_collection.find({"user_id": user["user_id"]}))
     docs.sort(key=lambda d: d.get("date", ""), reverse=True)
     return {"goals": docs}
@@ -233,37 +208,32 @@ def list_goals(user: dict = Depends(get_current_user)):
 
 @app.get("/api/progress/workouts")
 def list_workouts(user: dict = Depends(get_current_user)):
-    """Returns all logged workouts for the current user, most recent first."""
     docs = list(workout_logs_collection.find({"user_id": user["user_id"]}))
     docs.sort(key=lambda d: d.get("logged_at", ""), reverse=True)
     return {"workouts": docs}
 
 
-# ------------------------------------------------------------ fitness qa ---
 @app.post("/api/fitness/ask")
 def fitness_ask(data: FitnessQuestion, user: dict = Depends(get_current_user)):
-    """
-    Runs the LangGraph Fitness Q&A Agent (RAG over fitness_kb).
-    General fitness/training questions, not tied to the user's own data.
-    """
     response_text = run_fitness_qa_agent(data.question)
     return {"response": response_text}
 
 
-# ------------------------------------------------------------- frontend ---
+# --------------------------- Frontend ---------------------------
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 @app.get("/")
 def serve_signup():
     return FileResponse("static/signup.html")
 
-
 @app.get("/login")
 def serve_login():
     return FileResponse("static/login.html")
 
-
 @app.get("/profile")
 def serve_profile():
     return FileResponse("static/profile.html")
+
+@app.get("/dashboard")
+def serve_dashboard():
+    return FileResponse("static/dashboard.html")
