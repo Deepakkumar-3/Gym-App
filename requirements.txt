@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+astrapy
+python-dotenv
+bcrypt
+pyjwt
+python-multipart
+pydantic[email]
+langgraph
+groq
