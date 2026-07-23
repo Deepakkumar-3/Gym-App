@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Gym App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=IBM+Plex+Mono:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="page">
+    <div class="rack rack--wide">
+      <div class="top-bar">
+        <div>
+          <p class="sign">Gym App</p>
+          <h1 style="font-size:28px;margin-bottom:0;">Dashboard</h1>
+        </div>
+        <div>
+          <button onclick="window.location.href='/profile'">Profile</button>
+          <button class="danger" onclick="logout()">Log out</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="message" class="message"></div>
+
+        <!-- Nutrition Agent -->
+        <section>
+          <h2>Nutrition Agent</h2>
+          <textarea id="nutritionInput" placeholder="Ask about calories, macros..."></textarea>
+          <button onclick="askAgent('/api/nutrition/ask','nutritionInput','nutritionResponse')">Ask</button>
+          <div id="nutritionResponse" class="message"></div>
+        </section>
+
+        <!-- Progress Agent -->
+        <section>
+          <h2>Progress Agent</h2>
+          <textarea id="progressInput" placeholder="Log your workout..."></textarea>
+          <button onclick="askAgent('/api/progress/log','progressInput','progressResponse')">Log</button>
+          <div id="progressResponse" class="message"></div>
+        </section>
+
+        <!-- Injury Agent -->
+        <section>
+          <h2>Injury Agent</h2>
+          <textarea id="injuryInput" placeholder="Report an injury..."></textarea>
+          <button onclick="askAgent('/api/injuries/report','injuryInput','injuryResponse')">Report</button>
+          <div id="injuryResponse" class="message"></div>
+        </section>
+
+        <!-- Fitness Q&A Agent -->
+        <section>
+          <h2>Fitness Q&A Agent</h2>
+          <textarea id="fitnessInput" placeholder="Ask a fitness question..."></textarea>
+          <button onclick="askAgent('/api/fitness/ask','fitnessInput','fitnessResponse')">Ask</button>
+          <div id="fitnessResponse" class="message"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/auth.js"></script>
+  <script>
+    const messageEl = document.getElementById("message");
+
+    async function askAgent(endpoint, inputId, outputId) {
+      const question = document.getElementById(inputId).value;
+      try {
+        const res = await apiFetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: question, message: question })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMessage(document.getElementById(outputId), data.detail || "Error", "error");
+        } else {
+          showMessage(document.getElementById(outputId), data.response, "success");
+        }
+      } catch (err) {
+        showMessage(document.getElementById(outputId), "Network error — try again.", "error");
+      }
+    }
+  </script>
+</body>
+</html>
