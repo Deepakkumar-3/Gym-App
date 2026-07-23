@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your profile — Gym App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=IBM+Plex+Mono:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="page">
+    <div class="rack rack--wide">
+      <div class="top-bar">
+        <div>
+          <p class="sign">Gym App</p>
+          <h1 style="font-size:28px;margin-bottom:0;">Your profile</h1>
+        </div>
+        <button class="danger" id="logout-btn">Log out</button>
+      </div>
+
+      <div class="card">
+        <div id="message" class="message"></div>
+        <div id="loading" style="color:var(--text-muted);">Loading your profile…</div>
+
+        <form id="profile-form" style="display:none;">
+          <div class="row2">
+            <div class="field">
+              <label for="name">Name</label>
+              <input type="text" id="name" required>
+            </div>
+            <div class="field">
+              <label for="email">Email</label>
+              <input type="email" id="email" disabled>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div class="field">
+              <label for="sex">Biological sex</label>
+              <select id="sex" required>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </div>
+            <div class="field"></div>
+          </div>
+
+          <div class="vitals">
+            <div class="vital-tile">
+              <label for="age">Age</label>
+              <input type="number" id="age" required min="1" max="119">
+              <span class="unit">years</span>
+            </div>
+            <div class="vital-tile">
+              <label for="weight_kg">Weight</label>
+              <input type="number" id="weight_kg" required min="1" step="0.1">
+              <span class="unit">kg</span>
+            </div>
+            <div class="vital-tile">
+              <label for="height_cm">Height</label>
+              <input type="number" id="height_cm" required min="1" step="0.1">
+              <span class="unit">cm</span>
+            </div>
+          </div>
+
+          <div class="row2">
+            <div class="field">
+              <label for="activity_level">Activity level</label>
+              <select id="activity_level" required>
+                <option value="sedentary">Sedentary — little to no exercise</option>
+                <option value="lightly_active">Lightly active — 1–3 days/week</option>
+                <option value="moderately_active">Moderately active — 3–5 days/week</option>
+                <option value="very_active">Very active — 6–7 days/week</option>
+                <option value="extra_active">Extra active — physical job + training</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="goal">Goal</label>
+              <select id="goal" required>
+                <option value="muscle_gain">Muscle gain</option>
+                <option value="weight_loss">Weight loss</option>
+                <option value="stay_active">Stay active</option>
+                <option value="body_builder">Body builder</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" id="save-btn">Save changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/auth.js"></script>
+  <script>
+    const messageEl = document.getElementById("message");
+    const loadingEl = document.getElementById("loading");
+    const formEl = document.getElementById("profile-form");
+    const saveBtn = document.getElementById("save-btn");
+
+    function fillForm(profile) {
+      document.getElementById("name").value = profile.name;
+      document.getElementById("email").value = profile.email;
+      document.getElementById("age").value = profile.age;
+      document.getElementById("sex").value = profile.sex;
+      document.getElementById("weight_kg").value = profile.weight_kg;
+      document.getElementById("height_cm").value = profile.height_cm;
+      document.getElementById("activity_level").value = profile.activity_level;
+      document.getElementById("goal").value = profile.goal;
+    }
+
+    async function loadProfile() {
+      if (!getAccessToken()) {
+        window.location.href = "/login";
+        return;
+      }
+      try {
+        const res = await apiFetch("/api/me");
+        if (!res.ok) throw new Error("Failed to load profile");
+        const profile = await res.json();
+        fillForm(profile);
+        loadingEl.style.display = "none";
+        formEl.style.display = "block";
+      } catch (err) {
+        showMessage(messageEl, "Could not load your profile. Try logging in again.", "error");
+      }
+    }
+
+    formEl.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      saveBtn.disabled = true;
+
+      const payload = {
+        name: document.getElementById("name").value,
+        age: Number(document.getElementById("age").value),
+        sex: document.getElementById("sex").value,
+        weight_kg: Number(document.getElementById("weight_kg").value),
+        height_cm: Number(document.getElementById("height_cm").value),
+        activity_level: document.getElementById("activity_level").value,
+        goal: document.getElementById("goal").value,
+      };
+
+      try {
+        const res = await apiFetch("/api/me", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(messageEl, data.detail || "Could not save changes.", "error");
+        } else {
+          fillForm(data);
+          showMessage(messageEl, "Saved.", "success");
+        }
+      } catch (err) {
+        // apiFetch already redirects to /login on an unrecoverable 401
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    document.getElementById("logout-btn").addEventListener("click", logout);
+
+    loadProfile();
+  </script>
+</body>
+</html>

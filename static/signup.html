@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create your account — Gym App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700&family=IBM+Plex+Mono:wght@600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="page">
+    <div class="rack">
+      <p class="sign">Gym App</p>
+      <h1>Set up your rack</h1>
+
+      <div class="card">
+        <div id="message" class="message"></div>
+
+        <form id="signup-form">
+          <div class="field">
+            <label for="name">Name</label>
+            <input type="text" id="name" required autocomplete="name">
+          </div>
+
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" required autocomplete="email">
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" required minlength="8" autocomplete="new-password">
+          </div>
+
+          <div class="field">
+            <label for="sex">Biological sex</label>
+            <select id="sex" required>
+              <option value="" disabled selected>Choose one</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+
+          <div class="vitals">
+            <div class="vital-tile">
+              <label for="age">Age</label>
+              <input type="number" id="age" required min="1" max="119" placeholder="0">
+              <span class="unit">years</span>
+            </div>
+            <div class="vital-tile">
+              <label for="weight_kg">Weight</label>
+              <input type="number" id="weight_kg" required min="1" step="0.1" placeholder="0">
+              <span class="unit">kg</span>
+            </div>
+            <div class="vital-tile">
+              <label for="height_cm">Height</label>
+              <input type="number" id="height_cm" required min="1" step="0.1" placeholder="0">
+              <span class="unit">cm</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="activity_level">Activity level</label>
+            <select id="activity_level" required>
+              <option value="" disabled selected>Choose one</option>
+              <option value="sedentary">Sedentary — little to no exercise</option>
+              <option value="lightly_active">Lightly active — 1–3 days/week</option>
+              <option value="moderately_active">Moderately active — 3–5 days/week</option>
+              <option value="very_active">Very active — 6–7 days/week</option>
+              <option value="extra_active">Extra active — physical job + training</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="goal">Goal</label>
+            <select id="goal" required>
+              <option value="" disabled selected>Choose one</option>
+              <option value="muscle_gain">Muscle gain</option>
+              <option value="weight_loss">Weight loss</option>
+              <option value="stay_active">Stay active</option>
+              <option value="body_builder">Body builder</option>
+            </select>
+          </div>
+
+          <button type="submit" id="submit-btn">Create account</button>
+        </form>
+
+        <p class="hint">Already training with us? <a href="/login">Log in</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/auth.js"></script>
+  <script>
+    const form = document.getElementById("signup-form");
+    const messageEl = document.getElementById("message");
+    const submitBtn = document.getElementById("submit-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+
+      const payload = {
+        name: document.getElementById("name").value,
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value,
+        age: Number(document.getElementById("age").value),
+        sex: document.getElementById("sex").value,
+        weight_kg: Number(document.getElementById("weight_kg").value),
+        height_cm: Number(document.getElementById("height_cm").value),
+        activity_level: document.getElementById("activity_level").value,
+        goal: document.getElementById("goal").value,
+      };
+
+      try {
+        const res = await fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(messageEl, data.detail || "Something went wrong.", "error");
+          submitBtn.disabled = false;
+          return;
+        }
+
+        setAccessToken(data.access_token);
+        window.location.href = "/profile";
+      } catch (err) {
+        showMessage(messageEl, "Network error — is the server running?", "error");
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
