@@ -31,7 +31,7 @@
           <button type="submit" id="submit-btn">Log in</button>
         </form>
 
-        <p class="hint">New here? <a href="/">Create an account</a></p>
+        <p class="hint">New here? <a href="/signup">Create an account</a></p>
       </div>
     </div>
   </div>
@@ -61,13 +61,14 @@
         const data = await res.json();
 
         if (!res.ok) {
-          showMessage(messageEl, data.detail || "Something went wrong.", "error");
+          showMessage(messageEl, data.detail || "Incorrect email or password.", "error");
           submitBtn.disabled = false;
           return;
         }
 
         setAccessToken(data.access_token);
-        window.location.href = "/profile";
+        // Redirect to dashboard after successful login
+        window.location.href = "/dashboard";
       } catch (err) {
         showMessage(messageEl, "Network error — is the server running?", "error");
         submitBtn.disabled = false;
